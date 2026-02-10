@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  Clock,
   Users,
   Flame,
   ShoppingCart,
@@ -16,131 +15,17 @@ import {
   Sparkles,
 } from "lucide-react";
 import DashboardShell from "./components/DashboardShell";
+import { formatDateKey } from "@/lib/week";
+import type { SuggestionRecipe } from "@/app/actions/suggestions";
 
 // Types
-interface Recipe {
-  id: string;
-  name: string;
-  emoji: string;
-  region: string;
-  time: string;
-  difficulty: "Fácil" | "Medio" | "Elaborado";
-  cost: number;
-  baseServings: number;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  tags: string[];
-  ingredients: { name: string; amount: string; unit: string }[];
-  steps: string[];
-}
+type Recipe = SuggestionRecipe;
 
-// Mock data
-const DAILY_SUGGESTIONS: Recipe[] = [
-  {
-    id: "aji-gallina",
-    name: "Ají de Gallina",
-    emoji: "🍲",
-    region: "Lima",
-    time: "45 min",
-    difficulty: "Medio",
-    cost: 8.0,
-    baseServings: 4,
-    calories: 580,
-    protein: 32,
-    carbs: 45,
-    fat: 28,
-    tags: ["Tradición", "Alto en proteína"],
-    ingredients: [
-      { name: "Pechuga de pollo", amount: "500", unit: "g" },
-      { name: "Ají amarillo", amount: "4", unit: "unidades" },
-      { name: "Pan de molde", amount: "4", unit: "rebanadas" },
-      { name: "Leche evaporada", amount: "1", unit: "taza" },
-      { name: "Queso parmesano", amount: "50", unit: "g" },
-      { name: "Nueces", amount: "50", unit: "g" },
-      { name: "Cebolla", amount: "1", unit: "unidad" },
-      { name: "Ajo", amount: "3", unit: "dientes" },
-      { name: "Arroz", amount: "2", unit: "tazas" },
-      { name: "Papa amarilla", amount: "4", unit: "unidades" },
-      { name: "Huevo", amount: "2", unit: "unidades" },
-      { name: "Aceitunas", amount: "8", unit: "unidades" },
-    ],
-    steps: [
-      "Cocina el pollo en agua con sal hasta que esté tierno. Desmenuza y reserva el caldo.",
-      "Licúa el ají amarillo, pan remojado en leche, nueces y un poco de caldo.",
-      "Sofríe la cebolla y el ajo. Agrega la crema de ají y cocina 10 minutos.",
-      "Incorpora el pollo desmenuzado y ajusta la sal. Añade el queso parmesano.",
-      "Sirve sobre arroz blanco con papa amarilla, huevo duro y aceitunas.",
-    ],
-  },
-  {
-    id: "lomo-saltado",
-    name: "Lomo Saltado",
-    emoji: "🥩",
-    region: "Lima",
-    time: "30 min",
-    difficulty: "Fácil",
-    cost: 12.0,
-    baseServings: 4,
-    calories: 520,
-    protein: 38,
-    carbs: 42,
-    fat: 22,
-    tags: ["Rápido", "Favorito familiar"],
-    ingredients: [
-      { name: "Lomo de res", amount: "500", unit: "g" },
-      { name: "Cebolla roja", amount: "2", unit: "unidades" },
-      { name: "Tomate", amount: "2", unit: "unidades" },
-      { name: "Ají amarillo", amount: "1", unit: "unidad" },
-      { name: "Sillao", amount: "3", unit: "cucharadas" },
-      { name: "Vinagre", amount: "2", unit: "cucharadas" },
-      { name: "Papas fritas", amount: "400", unit: "g" },
-      { name: "Arroz", amount: "2", unit: "tazas" },
-      { name: "Cilantro", amount: "1", unit: "manojo" },
-    ],
-    steps: [
-      "Corta el lomo en tiras y sazónalo con sal y pimienta.",
-      "En un wok caliente, sella la carne a fuego alto. Retira y reserva.",
-      "Saltea la cebolla en plumas y el tomate en gajos. Agrega el ají.",
-      "Regresa la carne, añade sillao y vinagre. Mezcla rápidamente.",
-      "Incorpora las papas fritas y cilantro. Sirve con arroz.",
-    ],
-  },
-  {
-    id: "arroz-con-pollo",
-    name: "Arroz con Pollo",
-    emoji: "🍗",
-    region: "Costa",
-    time: "50 min",
-    difficulty: "Medio",
-    cost: 7.5,
-    baseServings: 4,
-    calories: 490,
-    protein: 28,
-    carbs: 58,
-    fat: 16,
-    tags: ["Económico", "Familiar"],
-    ingredients: [
-      { name: "Pollo en presas", amount: "1", unit: "kg" },
-      { name: "Arroz", amount: "3", unit: "tazas" },
-      { name: "Culantro", amount: "1", unit: "atado" },
-      { name: "Espinaca", amount: "100", unit: "g" },
-      { name: "Arveja", amount: "1", unit: "taza" },
-      { name: "Zanahoria", amount: "1", unit: "unidad" },
-      { name: "Pimiento", amount: "1", unit: "unidad" },
-      { name: "Cerveza negra", amount: "1/2", unit: "taza" },
-      { name: "Ají amarillo", amount: "2", unit: "cucharadas" },
-    ],
-    steps: [
-      "Licúa el culantro y espinaca con un poco de agua para hacer la pasta verde.",
-      "Dora las presas de pollo sazonadas. Retira y reserva.",
-      "Sofríe cebolla, ajo y ají. Agrega la pasta verde y cerveza.",
-      "Incorpora el arroz, las verduras y el caldo. Cocina tapado 20 min.",
-      "Sirve con salsa criolla y rodajas de huevo duro.",
-    ],
-  },
-];
+const TYPE_EMOJI: Record<Recipe["type"], string> = {
+  starter: "🥗",
+  main: "🍲",
+  drink: "🥤",
+};
 
 const DAYS_OF_WEEK = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
 
@@ -157,19 +42,18 @@ function SuggestionCard({
   servings: number;
 }>) {
   const multiplier = servings / recipe.baseServings;
-  const adjustedCost = (recipe.cost * multiplier).toFixed(2);
+  const calories = recipe.nutrition?.energyKcal ?? null;
 
   return (
     <button
       onClick={onSelect}
-      className={`w-full text-left rounded-2xl border-2 overflow-hidden transition-all ${
-        isSelected
+      className={`w-full text-left rounded-2xl border-2 overflow-hidden transition-all ${isSelected
           ? "border-primary bg-primary-light shadow-lg shadow-primary/20"
           : "border-card-border bg-card hover:border-primary/50 hover:shadow-md"
-      }`}
+        }`}
     >
-      <div className="relative h-32 sm:h-28 bg-gradient-to-br from-accent-yellow to-accent-orange flex items-center justify-center">
-        <span className="text-5xl sm:text-4xl">{recipe.emoji}</span>
+      <div className="relative h-32 sm:h-28 bg-linear-to-br from-accent-yellow to-accent-orange flex items-center justify-center">
+        <span className="text-5xl sm:text-4xl">{TYPE_EMOJI[recipe.type]}</span>
         {isSelected && (
           <div className="absolute top-2 right-2 w-7 h-7 bg-primary rounded-full flex items-center justify-center">
             <Check className="w-4 h-4 text-white" />
@@ -177,31 +61,25 @@ function SuggestionCard({
         )}
         <div className="absolute bottom-2 left-2">
           <span className="px-2 py-0.5 bg-white/90 backdrop-blur-sm rounded-full text-xs font-medium text-secondary">
-            {recipe.region}
+            {recipe.region ?? "Peru"}
           </span>
         </div>
       </div>
       <div className="p-3">
         <h3 className="font-bold text-foreground mb-1 text-sm">{recipe.name}</h3>
         <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
-          <span className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {recipe.time}
+          <span className="rounded-full bg-card-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {recipe.typeLabel}
           </span>
-          <span className="flex items-center gap-1">
-            <Flame className="w-3 h-3" />
-            {recipe.calories} kcal
-          </span>
+          {calories != null && (
+            <span className="flex items-center gap-1">
+              <Flame className="w-3 h-3" />
+              {Math.round(calories * multiplier)} kcal
+            </span>
+          )}
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex gap-1">
-            {recipe.tags.slice(0, 1).map((tag) => (
-              <span key={tag} className="px-2 py-0.5 bg-accent-green rounded-full text-xs font-medium text-success">
-                {tag}
-              </span>
-            ))}
-          </div>
-          <span className="text-sm font-bold text-primary">S/ {adjustedCost}</span>
+          <span className="text-xs text-muted-foreground">Sugerencia del dia</span>
         </div>
       </div>
     </button>
@@ -220,6 +98,19 @@ function SelectedRecipeDetail({
 }>) {
   const [activeTab, setActiveTab] = useState<"ingredientes" | "preparacion">("ingredientes");
   const multiplier = servings / recipe.baseServings;
+  const ingredients = recipe.ingredientsText
+    ? recipe.ingredientsText
+      .split(";")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => ({ name: item, amount: "", unit: "" }))
+    : [];
+  const steps = recipe.preparationText
+    ? recipe.preparationText
+      .split(";")
+      .map((item) => item.trim())
+      .filter(Boolean)
+    : [];
 
   const adjustAmount = (amount: string) => {
     const num = parseFloat(amount);
@@ -230,8 +121,19 @@ function SelectedRecipeDetail({
 
   return (
     <div className="bg-card rounded-2xl border border-card-border overflow-hidden">
-      <div className="relative h-48 sm:h-56 lg:h-64 bg-gradient-to-br from-accent-yellow via-accent-orange to-primary/30 flex items-center justify-center">
-        <span className="text-7xl sm:text-8xl lg:text-9xl">{recipe.emoji}</span>
+      <div className="relative h-48 sm:h-56 lg:h-64 overflow-hidden bg-linear-to-br from-accent-yellow via-accent-orange to-primary/30 flex items-center justify-center">
+        {recipe.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={recipe.imageUrl}
+            alt={recipe.name}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <span className="text-7xl sm:text-8xl lg:text-9xl">
+            {TYPE_EMOJI[recipe.type]}
+          </span>
+        )}
         <div className="absolute top-4 right-4 flex gap-2">
           <button className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors">
             <Heart className="w-5 h-5 text-muted-foreground" />
@@ -242,7 +144,7 @@ function SelectedRecipeDetail({
         </div>
         <div className="absolute bottom-4 left-4">
           <span className="px-3 py-1 bg-white/90 backdrop-blur-sm rounded-full text-sm font-medium text-secondary">
-            📍 {recipe.region}
+            📍 {recipe.region ?? "Peru"}
           </span>
         </div>
       </div>
@@ -251,19 +153,31 @@ function SelectedRecipeDetail({
         <h2 className="text-2xl lg:text-3xl font-bold text-foreground mb-4">{recipe.name}</h2>
         <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
           <div className="text-center p-2 sm:p-3 bg-accent-yellow/50 rounded-xl">
-            <p className="text-base sm:text-lg font-bold text-foreground">{Math.round(recipe.calories * multiplier)}</p>
+            <p className="text-base sm:text-lg font-bold text-foreground">
+              {recipe.nutrition?.energyKcal != null
+                ? Math.round(recipe.nutrition.energyKcal * multiplier)
+                : "—"}
+            </p>
             <p className="text-xs text-muted-foreground">kcal</p>
           </div>
           <div className="text-center p-2 sm:p-3 bg-accent-green/50 rounded-xl">
-            <p className="text-base sm:text-lg font-bold text-foreground">{Math.round(recipe.protein * multiplier)}g</p>
+            <p className="text-base sm:text-lg font-bold text-foreground">
+              {recipe.nutrition?.proteinG != null
+                ? Math.round(recipe.nutrition.proteinG * multiplier)
+                : "—"}
+            </p>
             <p className="text-xs text-muted-foreground">proteína</p>
           </div>
           <div className="text-center p-2 sm:p-3 bg-accent-blue/50 rounded-xl">
-            <p className="text-base sm:text-lg font-bold text-foreground">{Math.round(recipe.carbs * multiplier)}g</p>
+            <p className="text-base sm:text-lg font-bold text-foreground">
+              {recipe.nutrition?.carbsG != null
+                ? Math.round(recipe.nutrition.carbsG * multiplier)
+                : "—"}
+            </p>
             <p className="text-xs text-muted-foreground">carbs</p>
           </div>
           <div className="text-center p-2 sm:p-3 bg-accent-purple/50 rounded-xl">
-            <p className="text-base sm:text-lg font-bold text-foreground">{Math.round(recipe.fat * multiplier)}g</p>
+            <p className="text-base sm:text-lg font-bold text-foreground">—</p>
             <p className="text-xs text-muted-foreground">grasas</p>
           </div>
         </div>
@@ -292,23 +206,23 @@ function SelectedRecipeDetail({
               </button>
             </div>
           </div>
-          <div className="flex items-center justify-between sm:justify-center gap-4 p-3 sm:p-4 bg-primary/10 rounded-xl sm:min-w-[160px]">
-            <span className="text-sm text-foreground sm:hidden">Costo estimado</span>
+          <div className="flex items-center justify-between sm:justify-center gap-4 p-3 sm:p-4 bg-primary/10 rounded-xl sm:min-w-40">
+            <span className="text-sm text-foreground sm:hidden">Tipo</span>
             <div className="text-right sm:text-center">
-              <p className="text-2xl font-bold text-primary">S/ {(recipe.cost * multiplier).toFixed(2)}</p>
-              <p className="text-xs text-muted-foreground hidden sm:block">costo estimado</p>
+              <p className="text-2xl font-bold text-primary">
+                {recipe.typeLabel}
+              </p>
+              <p className="text-xs text-muted-foreground hidden sm:block">
+                tipo de receta
+              </p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
           <span className="flex items-center gap-1">
-            <Clock className="w-4 h-4" />
-            {recipe.time}
-          </span>
-          <span className="flex items-center gap-1">
             <ChefHat className="w-4 h-4" />
-            {recipe.difficulty}
+            {recipe.typeLabel}
           </span>
         </div>
       </div>
@@ -316,39 +230,39 @@ function SelectedRecipeDetail({
       <div className="flex border-b border-card-border">
         <button
           onClick={() => setActiveTab("ingredientes")}
-          className={`flex-1 py-4 text-sm font-semibold transition-colors ${
-            activeTab === "ingredientes" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
-          }`}
+          className={`flex-1 py-4 text-sm font-semibold transition-colors ${activeTab === "ingredientes" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
+            }`}
         >
-          🥕 Ingredientes ({recipe.ingredients.length})
+          🥕 Ingredientes ({ingredients.length})
         </button>
         <button
           onClick={() => setActiveTab("preparacion")}
-          className={`flex-1 py-4 text-sm font-semibold transition-colors ${
-            activeTab === "preparacion" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
-          }`}
+          className={`flex-1 py-4 text-sm font-semibold transition-colors ${activeTab === "preparacion" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
+            }`}
         >
-          👨‍🍳 Preparación ({recipe.steps.length} pasos)
+          👨‍🍳 Preparación ({steps.length} pasos)
         </button>
       </div>
 
       <div className="p-5 lg:p-6">
         {activeTab === "ingredientes" ? (
           <ul className="space-y-2 sm:space-y-3">
-            {recipe.ingredients.map((ing, index) => (
+            {ingredients.map((ing, index) => (
               <li key={index} className="flex items-center justify-between py-2 border-b border-card-border last:border-0">
                 <span className="text-foreground">{ing.name}</span>
-                <span className="text-sm font-medium text-primary">
-                  {adjustAmount(ing.amount)} {ing.unit}
-                </span>
+                {(ing.amount || ing.unit) && (
+                  <span className="text-sm font-medium text-primary">
+                    {adjustAmount(ing.amount)} {ing.unit}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
         ) : (
           <ol className="space-y-4 lg:space-y-5">
-            {recipe.steps.map((step, index) => (
+            {steps.map((step, index) => (
               <li key={index} className="flex gap-3 sm:gap-4">
-                <span className="flex-shrink-0 w-8 h-8 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold text-sm">
+                <span className="shrink-0 w-8 h-8 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold text-sm">
                   {index + 1}
                 </span>
                 <p className="text-foreground leading-relaxed pt-1">{step}</p>
@@ -393,15 +307,14 @@ function WeeklyCalendar({
       {days.map((date) => {
         const isSelected = date.toDateString() === selectedDate.toDateString();
         const isToday = date.toDateString() === today.toDateString();
-        const isPlanned = plannedDays.includes(date.toDateString());
+        const isPlanned = plannedDays.includes(formatDateKey(date));
 
         return (
           <button
             key={date.toISOString()}
             onClick={() => onSelectDate(date)}
-            className={`flex-1 flex flex-col items-center py-2 sm:py-3 rounded-xl transition-all ${
-              isSelected ? "bg-primary text-white" : isToday ? "bg-primary-light text-primary" : "hover:bg-accent-yellow/50"
-            }`}
+            className={`flex-1 flex flex-col items-center py-2 sm:py-3 rounded-xl transition-all ${isSelected ? "bg-primary text-white" : isToday ? "bg-primary-light text-primary" : "hover:bg-accent-yellow/50"
+              }`}
           >
             <span className={`text-xs sm:text-sm ${isSelected ? "text-white/70" : "text-muted-foreground"}`}>
               {DAYS_OF_WEEK[date.getDay()]}
@@ -445,11 +358,29 @@ function DateHeader({
 }
 
 // Main Component
-export default function DashboardHomeClient({ userName }: Readonly<{ userName: string }>) {
+export default function DashboardHomeClient({
+  userName,
+  initialSuggestions,
+  plannedDays,
+}: Readonly<{
+  userName: string;
+  initialSuggestions: Recipe[];
+  plannedDays: string[];
+}>) {
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedRecipe, setSelectedRecipe] = useState<Recipe>(DAILY_SUGGESTIONS[0]);
+  const [dailySuggestions, setDailySuggestions] = useState(initialSuggestions);
+  const [selectedRecipeId, setSelectedRecipeId] = useState<number | null>(
+    initialSuggestions[0]?.id ?? null
+  );
   const [servings, setServings] = useState(4);
-  const [plannedDays] = useState<string[]>([new Date().toDateString()]);
+
+  const selectedRecipe = useMemo(
+    () =>
+      dailySuggestions.find((recipe) => recipe.id === selectedRecipeId) ??
+      dailySuggestions[0] ??
+      null,
+    [dailySuggestions, selectedRecipeId]
+  );
 
   const navigateDay = (direction: number) => {
     const newDate = new Date(selectedDate);
@@ -460,6 +391,38 @@ export default function DashboardHomeClient({ userName }: Readonly<{ userName: s
   const handleChangeServings = (delta: number) => {
     setServings((prev) => Math.max(1, Math.min(12, prev + delta)));
   };
+
+  const handleRefreshSuggestions = () => {
+    setDailySuggestions((prev) => {
+      if (prev.length < 2) return prev;
+      const next = [...prev];
+      for (let i = next.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [next[i], next[j]] = [next[j], next[i]];
+      }
+      setSelectedRecipeId(next[0]?.id ?? null);
+      return next;
+    });
+  };
+
+  if (!selectedRecipe) {
+    return (
+      <DashboardShell
+        userName={userName}
+        title="Tu almuerzo de hoy"
+        subtitle="Elige que cocinar hoy"
+      >
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <div className="rounded-2xl border border-card-border bg-card p-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              Aun no hay sugerencias disponibles. Sube recetas o intenta mas
+              tarde.
+            </p>
+          </div>
+        </div>
+      </DashboardShell>
+    );
+  }
 
   return (
     <DashboardShell userName={userName} title="Tu almuerzo de hoy" subtitle="Elige qué cocinar hoy">
@@ -484,19 +447,22 @@ export default function DashboardHomeClient({ userName }: Readonly<{ userName: s
                   <Sparkles className="w-5 h-5 text-primary" />
                   <h2 className="text-lg font-bold text-foreground">Elige tu almuerzo</h2>
                 </div>
-                <button className="flex items-center gap-1 text-sm text-primary hover:text-primary-hover transition-colors">
+                <button
+                  onClick={handleRefreshSuggestions}
+                  className="flex items-center gap-1 text-sm text-primary hover:text-primary-hover transition-colors"
+                >
                   <RefreshCw className="w-4 h-4" />
                   <span className="hidden sm:inline">Otras</span>
                 </button>
               </div>
 
               <div className="flex gap-3 overflow-x-auto pb-2 sm:grid sm:grid-cols-2 sm:overflow-visible lg:flex lg:flex-col">
-                {DAILY_SUGGESTIONS.map((recipe) => (
-                  <div key={recipe.id} className="min-w-[200px] sm:min-w-0">
+                {dailySuggestions.map((recipe) => (
+                  <div key={recipe.id} className="min-w-50 sm:min-w-0">
                     <SuggestionCard
                       recipe={recipe}
                       isSelected={selectedRecipe.id === recipe.id}
-                      onSelect={() => setSelectedRecipe(recipe)}
+                      onSelect={() => setSelectedRecipeId(recipe.id)}
                       servings={servings}
                     />
                   </div>
@@ -511,7 +477,11 @@ export default function DashboardHomeClient({ userName }: Readonly<{ userName: s
               <ChefHat className="w-5 h-5 text-primary" />
               <h2 className="text-lg font-bold text-foreground">Tu almuerzo de hoy</h2>
             </div>
-            <SelectedRecipeDetail recipe={selectedRecipe} servings={servings} onChangeServings={handleChangeServings} />
+            <SelectedRecipeDetail
+              recipe={selectedRecipe}
+              servings={servings}
+              onChangeServings={handleChangeServings}
+            />
           </div>
         </div>
       </div>
