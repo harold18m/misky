@@ -1,68 +1,93 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   ChevronLeft,
   ChevronRight,
   Plus,
   Check,
-  Clock,
   Flame,
-  ShoppingCart,
-  MoreHorizontal,
   Sparkles,
 } from "lucide-react";
 import DashboardShell from "../components/DashboardShell";
+import {
+  clearPlannedMeal,
+  getWeekPlan,
+  setPlannedRecipe,
+  togglePlannedMeal,
+} from "@/app/actions/plan";
+import { formatDateKey, getWeekDays, getWeekStart } from "@/lib/week";
+import type { WeekPlanItem } from "@/app/actions/plan";
 
 // Types
-interface PlannedMeal {
-  id: string;
+type PlannedMeal = {
+  recipeId: number;
   name: string;
-  emoji: string;
-  time: string;
-  calories: number;
-  cost: number;
+  type: "starter" | "main" | "drink";
+  typeLabel: string;
+  calories: number | null;
   isCompleted: boolean;
-}
+};
 
-interface DayPlan {
+type RecipeOption = {
+  id: number;
+  name: string;
+  type: "starter" | "main" | "drink";
+  typeLabel: string;
+  ingredientsText: string | null;
+};
+
+type DayPlan = {
   date: Date;
   meal: PlannedMeal | null;
-}
-
-// Mock data
-const MOCK_RECIPES: PlannedMeal[] = [
-  { id: "1", name: "Ají de Gallina", emoji: "🍲", time: "45 min", calories: 580, cost: 8.0, isCompleted: false },
-  { id: "2", name: "Lomo Saltado", emoji: "🥩", time: "30 min", calories: 520, cost: 12.0, isCompleted: true },
-  { id: "3", name: "Arroz con Pollo", emoji: "🍗", time: "50 min", calories: 490, cost: 7.5, isCompleted: false },
-  { id: "4", name: "Ceviche", emoji: "🐟", time: "20 min", calories: 180, cost: 15.0, isCompleted: false },
-  { id: "5", name: "Causa Limeña", emoji: "🥔", time: "40 min", calories: 350, cost: 6.0, isCompleted: true },
-  { id: "6", name: "Seco de Res", emoji: "🍖", time: "60 min", calories: 620, cost: 10.0, isCompleted: false },
-  { id: "7", name: "Tacu Tacu", emoji: "🍚", time: "35 min", calories: 450, cost: 5.5, isCompleted: false },
-];
+};
 
 const DAYS_OF_WEEK = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 const DAYS_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MONTHS = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
 ];
 
-function getWeekDays(date: Date): Date[] {
-  const start = new Date(date);
-  start.setDate(date.getDate() - date.getDay());
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    return d;
-  });
-}
+const TYPE_EMOJI: Record<"starter" | "main" | "drink", string> = {
+  starter: "🥗",
+  main: "🍲",
+  drink: "🥤",
+};
 
-function generateWeekPlan(weekDays: Date[]): DayPlan[] {
-  return weekDays.map((date, index) => ({
-    date,
-    meal: index < MOCK_RECIPES.length ? MOCK_RECIPES[index] : null,
-  }));
+function buildWeekPlan(
+  weekDays: Date[],
+  items: WeekPlanItem[],
+  optionsById: Map<number, RecipeOption>
+): DayPlan[] {
+  const byDay = new Map(items.map((item) => [item.dayIndex, item]));
+  return weekDays.map((date, index) => {
+    const item = byDay.get(index);
+    if (!item) return { date, meal: null };
+
+    const option = optionsById.get(item.recipeId);
+    return {
+      date,
+      meal: {
+        recipeId: item.recipeId,
+        name: item.name,
+        type: item.type,
+        typeLabel: option?.typeLabel ?? "Plato",
+        calories: item.calories,
+        isCompleted: item.isCompleted,
+      },
+    };
+  });
 }
 
 // Componente: Card del día
@@ -71,28 +96,28 @@ function DayCard({
   isToday,
   onToggleComplete,
   onAddMeal,
+  onClearMeal,
 }: Readonly<{
   dayPlan: DayPlan;
   isToday: boolean;
   onToggleComplete: () => void;
   onAddMeal: () => void;
+  onClearMeal: () => void;
 }>) {
   const dayName = DAYS_OF_WEEK[dayPlan.date.getDay()];
   const dayNumber = dayPlan.date.getDate();
 
   return (
     <div
-      className={`rounded-2xl border-2 overflow-hidden transition-all ${
-        isToday
+      className={`rounded-2xl border-2 overflow-hidden transition-all ${isToday
           ? "border-primary bg-primary-light/50"
           : "border-card-border bg-card hover:border-primary/30"
-      }`}
+        }`}
     >
       {/* Day Header */}
       <div
-        className={`px-4 py-3 flex items-center justify-between ${
-          isToday ? "bg-primary text-white" : "bg-card-border/30"
-        }`}
+        className={`px-4 py-3 flex items-center justify-between ${isToday ? "bg-primary text-white" : "bg-card-border/30"
+          }`}
       >
         <div>
           <p className={`text-xs ${isToday ? "text-white/70" : "text-muted-foreground"}`}>
@@ -113,39 +138,44 @@ function DayCard({
           <div className="space-y-3">
             {/* Meal Info */}
             <div className="flex items-start gap-3">
-              <span className="text-3xl">{dayPlan.meal.emoji}</span>
+              <span className="text-3xl">{TYPE_EMOJI[dayPlan.meal.type]}</span>
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-foreground truncate">{dayPlan.meal.name}</h3>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {dayPlan.meal.time}
+                  <span className="rounded-full bg-card-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {dayPlan.meal.typeLabel}
                   </span>
-                  <span>•</span>
-                  <span className="flex items-center gap-1">
-                    <Flame className="w-3 h-3" />
-                    {dayPlan.meal.calories} kcal
-                  </span>
+                  {dayPlan.meal.calories != null && (
+                    <>
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
+                        <Flame className="w-3 h-3" />
+                        {Math.round(dayPlan.meal.calories)} kcal
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Cost & Actions */}
             <div className="flex items-center justify-between pt-2 border-t border-card-border">
-              <span className="text-sm font-bold text-primary">S/ {dayPlan.meal.cost.toFixed(2)}</span>
+              <span className="text-xs text-muted-foreground">Planificado</span>
               <div className="flex items-center gap-2">
                 <button
+                  onClick={onClearMeal}
+                  className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
+                >
+                  Quitar
+                </button>
+                <button
                   onClick={onToggleComplete}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                    dayPlan.meal.isCompleted
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${dayPlan.meal.isCompleted
                       ? "bg-success text-white"
                       : "border-2 border-card-border hover:border-success"
-                  }`}
+                    }`}
                 >
                   {dayPlan.meal.isCompleted && <Check className="w-4 h-4" />}
-                </button>
-                <button className="w-8 h-8 rounded-full hover:bg-accent-yellow/50 flex items-center justify-center transition-colors">
-                  <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
                 </button>
               </div>
             </div>
@@ -172,11 +202,13 @@ function ListView({
   today,
   onToggleComplete,
   onAddMeal,
+  onClearMeal,
 }: Readonly<{
   weekPlan: DayPlan[];
   today: Date;
   onToggleComplete: (index: number) => void;
   onAddMeal: (index: number) => void;
+  onClearMeal: (index: number) => void;
 }>) {
   return (
     <div className="space-y-3">
@@ -187,20 +219,18 @@ function ListView({
         return (
           <div
             key={dayPlan.date.toISOString()}
-            className={`rounded-xl border overflow-hidden transition-all ${
-              isToday
+            className={`rounded-xl border overflow-hidden transition-all ${isToday
                 ? "border-primary bg-primary-light/30"
                 : isPast
                   ? "border-card-border bg-card/50 opacity-60"
                   : "border-card-border bg-card"
-            }`}
+              }`}
           >
             <div className="flex items-center">
               {/* Date Column */}
               <div
-                className={`w-16 sm:w-20 flex-shrink-0 py-4 flex flex-col items-center justify-center border-r ${
-                  isToday ? "bg-primary text-white border-primary" : "bg-card-border/20 border-card-border"
-                }`}
+                className={`w-16 sm:w-20 shrink-0 py-4 flex flex-col items-center justify-center border-r ${isToday ? "bg-primary text-white border-primary" : "bg-card-border/20 border-card-border"
+                  }`}
               >
                 <span className={`text-xs ${isToday ? "text-white/70" : "text-muted-foreground"}`}>
                   {DAYS_SHORT[dayPlan.date.getDay()]}
@@ -214,26 +244,37 @@ function ListView({
               <div className="flex-1 p-3 sm:p-4">
                 {dayPlan.meal ? (
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl sm:text-3xl">{dayPlan.meal.emoji}</span>
+                    <span className="text-2xl sm:text-3xl">
+                      {TYPE_EMOJI[dayPlan.meal.type]}
+                    </span>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-foreground truncate">{dayPlan.meal.name}</h3>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{dayPlan.meal.time}</span>
-                        <span>•</span>
-                        <span>{dayPlan.meal.calories} kcal</span>
-                        <span>•</span>
-                        <span className="font-medium text-primary">S/ {dayPlan.meal.cost.toFixed(2)}</span>
+                        <span className="rounded-full bg-card-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {dayPlan.meal.typeLabel}
+                        </span>
+                        {dayPlan.meal.calories != null && (
+                          <>
+                            <span>•</span>
+                            <span>{Math.round(dayPlan.meal.calories)} kcal</span>
+                          </>
+                        )}
                       </div>
                     </div>
                     <button
                       onClick={() => onToggleComplete(index)}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 ${
-                        dayPlan.meal.isCompleted
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0 ${dayPlan.meal.isCompleted
                           ? "bg-success text-white"
                           : "border-2 border-card-border hover:border-success"
-                      }`}
+                        }`}
                     >
                       {dayPlan.meal.isCompleted && <Check className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={() => onClearMeal(index)}
+                      className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      Quitar
                     </button>
                   </div>
                 ) : (
@@ -260,8 +301,10 @@ function ListView({
 function WeeklySummary({ weekPlan }: Readonly<{ weekPlan: DayPlan[] }>) {
   const plannedMeals = weekPlan.filter((d) => d.meal !== null);
   const completedMeals = plannedMeals.filter((d) => d.meal?.isCompleted);
-  const totalCost = plannedMeals.reduce((sum, d) => sum + (d.meal?.cost || 0), 0);
-  const totalCalories = plannedMeals.reduce((sum, d) => sum + (d.meal?.calories || 0), 0);
+  const totalCalories = plannedMeals.reduce(
+    (sum, d) => sum + (d.meal?.calories || 0),
+    0
+  );
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -274,49 +317,132 @@ function WeeklySummary({ weekPlan }: Readonly<{ weekPlan: DayPlan[] }>) {
         <p className="text-xs sm:text-sm text-muted-foreground">Completados</p>
       </div>
       <div className="bg-card rounded-xl border border-card-border p-4 text-center">
-        <p className="text-2xl sm:text-3xl font-bold text-primary">S/ {totalCost.toFixed(0)}</p>
-        <p className="text-xs sm:text-sm text-muted-foreground">Costo semanal</p>
+        <p className="text-2xl sm:text-3xl font-bold text-primary">
+          {totalCalories ? Math.round(totalCalories) : "—"}
+        </p>
+        <p className="text-xs sm:text-sm text-muted-foreground">kcal estimadas</p>
       </div>
       <div className="bg-card rounded-xl border border-card-border p-4 text-center">
-        <p className="text-2xl sm:text-3xl font-bold text-secondary">{totalCalories}</p>
-        <p className="text-xs sm:text-sm text-muted-foreground">kcal totales</p>
+        <p className="text-2xl sm:text-3xl font-bold text-secondary">{plannedMeals.length}</p>
+        <p className="text-xs sm:text-sm text-muted-foreground">Recetas en plan</p>
       </div>
     </div>
   );
 }
 
 // Main Component
-export default function PlanClient({ userName }: Readonly<{ userName: string }>) {
+export default function PlanClient({
+  userName,
+  initialWeekStart,
+  initialPlanItems,
+  recipeOptions,
+}: Readonly<{
+  userName: string;
+  initialWeekStart: string;
+  initialPlanItems: WeekPlanItem[];
+  recipeOptions: RecipeOption[];
+}>) {
   const today = new Date();
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
-    const start = new Date(today);
-    start.setDate(today.getDate() - today.getDay());
-    return start;
-  });
+  const [isPending, startTransition] = useTransition();
+  const [currentWeekStart, setCurrentWeekStart] = useState(() =>
+    getWeekStart(new Date(`${initialWeekStart}T00:00:00`))
+  );
+  const [weekPlanItems, setWeekPlanItems] = useState<WeekPlanItem[]>(
+    initialPlanItems
+  );
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [pickerDayIndex, setPickerDayIndex] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
+  const recipeOptionsById = useMemo(
+    () => new Map(recipeOptions.map((recipe) => [recipe.id, recipe])),
+    [recipeOptions]
+  );
   const weekDays = getWeekDays(currentWeekStart);
-  const [weekPlan, setWeekPlan] = useState<DayPlan[]>(() => generateWeekPlan(weekDays));
+  const weekStartKey = formatDateKey(currentWeekStart);
+  const weekPlan = useMemo(
+    () => buildWeekPlan(weekDays, weekPlanItems, recipeOptionsById),
+    [weekDays, weekPlanItems, recipeOptionsById]
+  );
+
+  const filteredOptions = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return recipeOptions;
+    return recipeOptions.filter((recipe) => {
+      const inName = recipe.name.toLowerCase().includes(term);
+      const inIngredients = recipe.ingredientsText
+        ? recipe.ingredientsText.toLowerCase().includes(term)
+        : false;
+      return inName || inIngredients;
+    });
+  }, [recipeOptions, searchTerm]);
+
+  const loadWeekPlan = async (weekKey: string) => {
+    const plan = await getWeekPlan(weekKey);
+    setWeekPlanItems(plan.items);
+  };
 
   const navigateWeek = (direction: number) => {
     const newStart = new Date(currentWeekStart);
     newStart.setDate(currentWeekStart.getDate() + direction * 7);
     setCurrentWeekStart(newStart);
-    setWeekPlan(generateWeekPlan(getWeekDays(newStart)));
+    startTransition(() => {
+      void loadWeekPlan(formatDateKey(newStart));
+    });
   };
 
   const handleToggleComplete = (index: number) => {
-    setWeekPlan((prev) =>
-      prev.map((day, i) =>
-        i === index && day.meal
-          ? { ...day, meal: { ...day.meal, isCompleted: !day.meal.isCompleted } }
-          : day
+    const entry = weekPlanItems.find((item) => item.dayIndex === index);
+    if (!entry) return;
+    const nextValue = !entry.isCompleted;
+
+    setWeekPlanItems((prev) =>
+      prev.map((item) =>
+        item.dayIndex === index ? { ...item, isCompleted: nextValue } : item
       )
     );
+
+    startTransition(() => {
+      void togglePlannedMeal(weekStartKey, index, nextValue);
+    });
   };
 
   const handleAddMeal = (index: number) => {
-    // TODO: Abrir modal de selección de receta
-    console.log("Agregar almuerzo para el día", index);
+    setPickerDayIndex(index);
+    setIsPickerOpen(true);
+  };
+
+  const handleSelectRecipe = (recipe: RecipeOption) => {
+    if (pickerDayIndex == null) return;
+
+    const dayIndex = pickerDayIndex;
+    setIsPickerOpen(false);
+    setPickerDayIndex(null);
+    setSearchTerm("");
+
+    setWeekPlanItems((prev) => {
+      const next = prev.filter((item) => item.dayIndex !== dayIndex);
+      next.push({
+        dayIndex,
+        recipeId: recipe.id,
+        name: recipe.name,
+        type: recipe.type,
+        calories: null,
+        isCompleted: false,
+      });
+      return next;
+    });
+
+    startTransition(() => {
+      void setPlannedRecipe(weekStartKey, dayIndex, recipe.id);
+    });
+  };
+
+  const handleClearMeal = (index: number) => {
+    setWeekPlanItems((prev) => prev.filter((item) => item.dayIndex !== index));
+    startTransition(() => {
+      void clearPlannedMeal(weekStartKey, index);
+    });
   };
 
   const weekLabel = `${weekDays[0].getDate()} - ${weekDays[6].getDate()} de ${MONTHS[weekDays[0].getMonth()]}`;
@@ -328,7 +454,8 @@ export default function PlanClient({ userName }: Readonly<{ userName: string }>)
         <div className="flex items-center justify-between">
           <button
             onClick={() => navigateWeek(-1)}
-            className="p-2 hover:bg-accent-yellow/50 rounded-xl transition-colors"
+            disabled={isPending}
+            className="p-2 hover:bg-accent-yellow/50 rounded-xl transition-colors disabled:opacity-60"
           >
             <ChevronLeft className="w-5 h-5 text-muted-foreground" />
           </button>
@@ -338,7 +465,8 @@ export default function PlanClient({ userName }: Readonly<{ userName: string }>)
           </div>
           <button
             onClick={() => navigateWeek(1)}
-            className="p-2 hover:bg-accent-yellow/50 rounded-xl transition-colors"
+            disabled={isPending}
+            className="p-2 hover:bg-accent-yellow/50 rounded-xl transition-colors disabled:opacity-60"
           >
             <ChevronRight className="w-5 h-5 text-muted-foreground" />
           </button>
@@ -356,6 +484,7 @@ export default function PlanClient({ userName }: Readonly<{ userName: string }>)
               isToday={dayPlan.date.toDateString() === today.toDateString()}
               onToggleComplete={() => handleToggleComplete(index)}
               onAddMeal={() => handleAddMeal(index)}
+              onClearMeal={() => handleClearMeal(index)}
             />
           ))}
         </div>
@@ -367,14 +496,84 @@ export default function PlanClient({ userName }: Readonly<{ userName: string }>)
             today={today}
             onToggleComplete={handleToggleComplete}
             onAddMeal={handleAddMeal}
+            onClearMeal={handleClearMeal}
           />
         </div>
 
+        {isPickerOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-xl rounded-2xl border border-card-border bg-card shadow-xl">
+              <div className="flex items-center justify-between border-b border-card-border px-4 py-3">
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">
+                    Selecciona una receta
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {pickerDayIndex != null
+                      ? `Dia ${DAYS_OF_WEEK[pickerDayIndex]}`
+                      : ""}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsPickerOpen(false);
+                    setPickerDayIndex(null);
+                    setSearchTerm("");
+                  }}
+                  className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Cerrar
+                </button>
+              </div>
+              <div className="p-4 space-y-3">
+                <input
+                  type="text"
+                  placeholder="Buscar receta..."
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-card-border bg-card px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <div className="max-h-[50vh] space-y-2 overflow-y-auto">
+                  {filteredOptions.map((recipe) => (
+                    <button
+                      key={recipe.id}
+                      onClick={() => handleSelectRecipe(recipe)}
+                      className="w-full rounded-xl border border-card-border px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {recipe.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {recipe.typeLabel}
+                          </p>
+                        </div>
+                        <span className="text-lg">
+                          {TYPE_EMOJI[recipe.type]}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                  {filteredOptions.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No hay recetas que coincidan con la busqueda.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-3">
-          <button className="flex-1 py-4 bg-primary hover:bg-primary-hover text-white font-semibold rounded-2xl flex items-center justify-center gap-2 transition-colors btn-primary-glow">
+          <button
+            disabled
+            className="flex-1 py-4 bg-primary/70 text-white font-semibold rounded-2xl flex items-center justify-center gap-2 transition-colors btn-primary-glow cursor-not-allowed"
+          >
             <Sparkles className="w-5 h-5" />
-            Autocompletar semana
+            Autocompletar semana (pronto)
           </button>
           {/* <button className="flex-1 py-4 border-2 border-primary text-primary font-semibold rounded-2xl flex items-center justify-center gap-2 hover:bg-primary-light transition-colors">
             <ShoppingCart className="w-5 h-5" />

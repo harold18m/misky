@@ -1,6 +1,8 @@
-import type { Metadata } from "next";
 import { currentUser } from "@clerk/nextjs/server";
+import { getShoppingList } from "@/app/actions/shopping-list";
+import { formatDateKey, getWeekStart } from "@/lib/week";
 import ComprasClient from "./ComprasClient";
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Lista de Compras | Misky",
@@ -9,5 +11,15 @@ export const metadata: Metadata = {
 
 export default async function ComprasPage() {
   const user = await currentUser();
-  return <ComprasClient userName={user?.firstName || "Usuario"} />;
+  const weekStart = getWeekStart(new Date());
+  const weekStartKey = formatDateKey(weekStart);
+  const shoppingList = await getShoppingList(weekStartKey);
+
+  return (
+    <ComprasClient
+      userName={user?.firstName || "Usuario"}
+      initialItems={shoppingList.items}
+      weekStart={weekStartKey}
+    />
+  );
 }
