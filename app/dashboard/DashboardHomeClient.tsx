@@ -48,8 +48,8 @@ function SuggestionCard({
     <button
       onClick={onSelect}
       className={`w-full text-left rounded-2xl border-2 overflow-hidden transition-all ${isSelected
-          ? "border-primary bg-primary-light shadow-lg shadow-primary/20"
-          : "border-card-border bg-card hover:border-primary/50 hover:shadow-md"
+        ? "border-primary bg-primary-light shadow-lg shadow-primary/20"
+        : "border-card-border bg-card hover:border-primary/50 hover:shadow-md"
         }`}
     >
       <div className="relative h-32 sm:h-28 bg-linear-to-br from-accent-yellow to-accent-orange flex items-center justify-center">
@@ -362,17 +362,32 @@ export default function DashboardHomeClient({
   userName,
   initialSuggestions,
   plannedDays,
+  plannedRecipesByDate,
 }: Readonly<{
   userName: string;
   initialSuggestions: Recipe[];
   plannedDays: string[];
+  plannedRecipesByDate: Record<string, Recipe>;
 }>) {
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [dailySuggestions, setDailySuggestions] = useState(initialSuggestions);
+  const today = new Date();
+  const todayKey = formatDateKey(today);
+  const todayPlanned = plannedRecipesByDate[todayKey] ?? null;
+  const initialList = todayPlanned
+    ? [
+      todayPlanned,
+      ...initialSuggestions.filter((recipe) => recipe.id !== todayPlanned.id),
+    ]
+    : initialSuggestions;
+
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [dailySuggestions, setDailySuggestions] = useState(initialList);
   const [selectedRecipeId, setSelectedRecipeId] = useState<number | null>(
-    initialSuggestions[0]?.id ?? null
+    todayPlanned?.id ?? initialList[0]?.id ?? null
   );
   const [servings, setServings] = useState(4);
+
+  const selectedDateKey = formatDateKey(selectedDate);
+  const plannedRecipe = plannedRecipesByDate[selectedDateKey] ?? null;
 
   const selectedRecipe = useMemo(
     () =>
@@ -382,10 +397,25 @@ export default function DashboardHomeClient({
     [dailySuggestions, selectedRecipeId]
   );
 
+  const applyDateSelection = (date: Date) => {
+    const dateKey = formatDateKey(date);
+    const planned = plannedRecipesByDate[dateKey] ?? null;
+    setSelectedDate(date);
+
+    if (planned) {
+      setDailySuggestions((prev) => {
+        const exists = prev.some((recipe) => recipe.id === planned.id);
+        if (exists) return prev;
+        return [planned, ...prev];
+      });
+      setSelectedRecipeId(planned.id);
+    }
+  };
+
   const navigateDay = (direction: number) => {
     const newDate = new Date(selectedDate);
     newDate.setDate(selectedDate.getDate() + direction);
-    setSelectedDate(newDate);
+    applyDateSelection(newDate);
   };
 
   const handleChangeServings = (delta: number) => {
@@ -434,7 +464,11 @@ export default function DashboardHomeClient({
 
         {/* Weekly Calendar */}
         <div className="mb-6">
-          <WeeklyCalendar selectedDate={selectedDate} onSelectDate={setSelectedDate} plannedDays={plannedDays} />
+          <WeeklyCalendar
+            selectedDate={selectedDate}
+            onSelectDate={applyDateSelection}
+            plannedDays={plannedDays}
+          />
         </div>
 
         {/* Content Grid */}
@@ -473,9 +507,18 @@ export default function DashboardHomeClient({
 
           {/* Recipe Detail Column */}
           <div className="lg:col-span-8 xl:col-span-9">
-            <div className="flex items-center gap-2 mb-4 lg:hidden">
-              <ChefHat className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-bold text-foreground">Tu almuerzo de hoy</h2>
+            <div className="flex items-center justify-between gap-2 mb-4 lg:hidden">
+              <div className="flex items-center gap-2">
+                <ChefHat className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-bold text-foreground">
+                  Tu almuerzo de hoy
+                </h2>
+              </div>
+              {plannedRecipe && (
+                <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-semibold text-success">
+                  Planificado
+                </span>
+              )}
             </div>
             <SelectedRecipeDetail
               recipe={selectedRecipe}

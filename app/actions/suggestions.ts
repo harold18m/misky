@@ -11,7 +11,7 @@ import {
     recipes,
     userPreferences,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 export type SuggestionRecipe = {
     id: number;
@@ -163,4 +163,60 @@ export async function getDailySuggestions(
     if (candidates.length === 0) return [];
 
     return shuffle(candidates).slice(0, count);
+}
+
+export async function getRecipesByIds(
+    recipeIds: number[]
+): Promise<SuggestionRecipe[]> {
+    if (recipeIds.length === 0) return [];
+
+    const rows = await db
+        .select({
+            recipeId: recipes.id,
+            name: recipes.name,
+            type: recipes.type,
+            ingredientsText: recipes.ingredientsText,
+            preparationText: recipes.preparationText,
+            imageUrl: menus.imageUrl,
+            departmentName: departments.name,
+            energyKcal: menuNutrition.energyKcal,
+            proteinG: menuNutrition.proteinG,
+            carbsG: menuNutrition.carbsG,
+        })
+        .from(recipes)
+        .leftJoin(menuRecipes, eq(menuRecipes.recipeId, recipes.id))
+        .leftJoin(menus, eq(menus.id, menuRecipes.menuId))
+        .leftJoin(pdfDocuments, eq(pdfDocuments.id, menus.pdfDocumentId))
+        .leftJoin(departments, eq(departments.id, pdfDocuments.departmentId))
+        .leftJoin(menuNutrition, eq(menuNutrition.menuId, menus.id))
+        .where(inArray(recipes.id, recipeIds));
+
+    const byRecipe = new Map<number, SuggestionRecipe>();
+    for (const row of rows) {
+        if (!byRecipe.has(row.recipeId)) {
+            byRecipe.set(row.recipeId, {
+                id: row.recipeId,
+                name: row.name,
+                type: row.type,
+                typeLabel: TYPE_LABELS[row.type],
+                region: row.departmentName ?? null,
+                imageUrl: row.imageUrl ?? null,
+                ingredientsText: row.ingredientsText ?? null,
+                preparationText: row.preparationText ?? null,
+                baseServings: 4,
+                nutrition:
+                    row.energyKcal != null || row.proteinG != null || row.carbsG != null
+                        ? {
+                            energyKcal:
+                                row.energyKcal != null ? Number(row.energyKcal) : null,
+                            proteinG:
+                                row.proteinG != null ? Number(row.proteinG) : null,
+                            carbsG: row.carbsG != null ? Number(row.carbsG) : null,
+                        }
+                        : null,
+            });
+        }
+    }
+
+    return Array.from(byRecipe.values());
 }
