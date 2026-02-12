@@ -112,3 +112,16 @@ export function getDishImagePublicUrl(pdfDocumentId: number, menuIndex: number):
   const base = url.replace(/\/$/, "");
   return `${base}/storage/v1/object/public/${DISH_IMAGES_BUCKET}/${pdfDocumentId}/${menuIndex}.png`;
 }
+
+/**
+ * Devuelve la URL pública de un PDF en el bucket pdfs.
+ */
+export function getPdfPublicUrl(storagePath: string): string {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL no definida");
+  }
+  const base = url.replace(/\/$/, "");
+  const normalizedPath = storagePath.replace(/^\//, "");
+  return `${base}/storage/v1/object/public/${PDFS_BUCKET}/${normalizedPath}`;
+}

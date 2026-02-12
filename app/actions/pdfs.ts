@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import { runScrapForDoc } from "@/lib/scrap-doc";
 import {
   removeDishImagesForDoc,
+  getPdfPublicUrl,
   uploadPdfToStorage,
 } from "@/lib/supabase-storage";
 
@@ -107,7 +108,7 @@ export async function uploadPdfs(
         .returning({ id: pdfDocuments.id });
 
       if (!inserted) {
-        await fs.unlink(tempPath).catch(() => {});
+        await fs.unlink(tempPath).catch(() => { });
         continue;
       }
 
@@ -115,8 +116,8 @@ export async function uploadPdfs(
         await runScrapForDoc(inserted.id, tempPath);
       } catch (scrapError) {
         await db.delete(pdfDocuments).where(eq(pdfDocuments.id, inserted.id));
-        await removeDishImagesForDoc(inserted.id).catch(() => {});
-        await fs.unlink(tempPath).catch(() => {});
+        await removeDishImagesForDoc(inserted.id).catch(() => { });
+        await fs.unlink(tempPath).catch(() => { });
         const msg = scrapError instanceof Error ? scrapError.message : String(scrapError);
         errors.push(`Error procesando "${file.name}": ${msg}`);
         continue;
@@ -144,7 +145,7 @@ export async function uploadPdfs(
 
       uploaded++;
     } catch (error) {
-      await fs.unlink(tempPath).catch(() => {});
+      await fs.unlink(tempPath).catch(() => { });
       const msg = error instanceof Error ? error.message : "Error desconocido";
       errors.push(`Error subiendo "${file.name}": ${msg}`);
     }
@@ -194,6 +195,7 @@ export type PdfDocumentInfo = {
   status: "pending" | "processing" | "done" | "error";
   uploadedAt: Date;
   departmentName: string;
+  pdfUrl: string | null;
 };
 
 /** Lista PDFs de un departamento */
@@ -218,6 +220,7 @@ export async function getPdfsByDepartment(
     status: doc.status,
     uploadedAt: doc.uploadedAt,
     departmentName: dept.name,
+    pdfUrl: doc.storagePath ? getPdfPublicUrl(doc.storagePath) : null,
   }));
 }
 

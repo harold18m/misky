@@ -313,7 +313,7 @@ function WeeklyCalendar({
           <button
             key={date.toISOString()}
             onClick={() => onSelectDate(date)}
-            className={`flex-1 flex flex-col items-center py-2 sm:py-3 rounded-xl transition-all ${isSelected ? "bg-primary text-white" : isToday ? "bg-primary-light text-primary" : "hover:bg-accent-yellow/50"
+            className={`flex-1 flex flex-col items-center py-2 sm:py-3 rounded-full transition-all ${isSelected ? "bg-primary text-white" : isToday ? "bg-primary-light text-primary" : "hover:bg-accent-yellow/50"
               }`}
           >
             <span className={`text-xs sm:text-sm ${isSelected ? "text-white/70" : "text-muted-foreground"}`}>

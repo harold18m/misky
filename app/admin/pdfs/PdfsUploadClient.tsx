@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  Eye,
   FileText,
   Loader2,
   MapPin,
@@ -118,9 +119,8 @@ function DepartmentSelector({
                     setOpen(false);
                     setSearch("");
                   }}
-                  className={`flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-primary-light/40 ${
-                    dept.id === selectedId ? "bg-primary-light/50" : ""
-                  }`}
+                  className={`flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-primary-light/40 ${dept.id === selectedId ? "bg-primary-light/50" : ""
+                    }`}
                 >
                   <span className="text-foreground">{dept.name}</span>
                   {dept.pdfCount > 0 && (
@@ -214,13 +214,12 @@ function UploadZone({
           if (!disabled) handleFiles(e.dataTransfer.files);
         }}
         onClick={() => !disabled && fileInputRef.current?.click()}
-        className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${
-          dragOver
-            ? "border-primary bg-primary-light/30"
-            : disabled
-              ? "cursor-not-allowed border-card-border/50 opacity-40"
-              : "cursor-pointer border-card-border hover:border-primary/40 hover:bg-accent-warm/30"
-        }`}
+        className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${dragOver
+          ? "border-primary bg-primary-light/30"
+          : disabled
+            ? "cursor-not-allowed border-card-border/50 opacity-40"
+            : "cursor-pointer border-card-border hover:border-primary/40 hover:bg-accent-warm/30"
+          }`}
       >
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-light">
           <Upload className="h-6 w-6 text-primary" />
@@ -414,6 +413,16 @@ function PdfList({
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge status={pdf.status} />
+            {pdf.pdfUrl && (
+              <a
+                href={pdf.pdfUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary-light"
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </a>
+            )}
             <button
               onClick={() => handleDelete(pdf.id)}
               disabled={deletingId === pdf.id}
